@@ -39,7 +39,8 @@ pip install "qrcode[pil]"
 要点：
 
 - 给脚本执行权限：`chmod +x openurl.cgi`
-- 房间数据写在 `/tmp/openurl_rooms/`，由脚本自动创建；CGI 运行用户（如 `www-data`、`_www`）需要对该目录有写权限
+- 房间数据默认写在 `/tmp/openurl_rooms/`，由脚本自动创建；CGI 运行用户（如 `www-data`、`_www`）需要对该目录有写权限，
+  要换位置就设 `OPENURL_ROOM_DIR`
 - 如果放在反向代理后面，务必正确传递 `HTTP_X_FORWARDED_HOST` 和 `HTTP_X_FORWARDED_PROTO`，
   否则二维码里生成的链接会是内网地址，手机扫码打不开
 
@@ -71,16 +72,20 @@ location = /openurl.cgi {
 二维码里的链接按请求自身的 `X-Forwarded-Host` / `Host` 和 `X-Forwarded-Proto` 推导，
 内网访问就生成内网地址，外网域名访问就生成外网地址。**正常部署不需要配任何东西。**
 
-只有当反向代理没传这些头（或者你需要固定域名）时才用下面两个可选环境变量兜底：
+以下都是可选环境变量，不设也能正常工作：
 
-| 变量 | 说明 | 示例 |
+| 变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `OPENURL_DEFAULT_HOST` | 取不到 `HTTP_HOST` 时，二维码链接使用的兜底主机名 | `example.com:8080` |
-| `OPENURL_HTTPS_HOSTS` | 逗号分隔的主机名片段，命中即强制用 `https` 生成链接 | `example.com,.myds.me` |
+| `OPENURL_ROOM_DIR` | `/tmp/openurl_rooms` | 存放房间 JSON 的目录，由脚本自动创建 |
+| `OPENURL_DEFAULT_HOST` | `localhost` | 取不到 `HTTP_HOST` 时，二维码链接使用的兜底主机名 |
+| `OPENURL_HTTPS_HOSTS` | 空 | 逗号分隔的主机名片段，命中即强制用 `https` 生成链接 |
+
+其中后两个只在反向代理没传 `X-Forwarded-*`（或者你需要固定域名）时才需要配。
 
 Apache 用 `SetEnv`：
 
 ```apache
+SetEnv OPENURL_ROOM_DIR /var/lib/openurl/rooms
 SetEnv OPENURL_DEFAULT_HOST example.com:8080
 SetEnv OPENURL_HTTPS_HOSTS example.com,.myds.me
 ```
@@ -88,6 +93,7 @@ SetEnv OPENURL_HTTPS_HOSTS example.com,.myds.me
 nginx + fcgiwrap 用 `fastcgi_param`：
 
 ```nginx
+fastcgi_param OPENURL_ROOM_DIR /var/lib/openurl/rooms;
 fastcgi_param OPENURL_DEFAULT_HOST example.com:8080;
 fastcgi_param OPENURL_HTTPS_HOSTS example.com,.myds.me;
 ```

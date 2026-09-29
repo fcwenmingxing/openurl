@@ -36,10 +36,16 @@ import fcntl
 import io
 import urllib.parse
 
-ROOM_DIR = "/tmp/openurl_rooms"
 ROOM_TTL = 30 * 60
 ROOM_MAX_MSGS = 50
 POLL_INTERVAL_MS = 2000
+
+# 房间数据目录（用环境变量覆盖，见 README「配置」一节）
+#   OPENURL_ROOM_DIR  存放房间 JSON 的目录，默认为 /tmp/openurl_rooms
+# 同样在调用时读取，长驻进程下不会沿用启动时的环境。
+def room_dir():
+    return os.environ.get("OPENURL_ROOM_DIR", "").strip() or "/tmp/openurl_rooms"
+
 
 # 二维码链接的兜底配置（用环境变量覆盖，见 README「配置」一节）
 #   OPENURL_DEFAULT_HOST  取不到 HTTP_HOST 时使用的兜底主机名，如 example.com:8080
@@ -70,7 +76,7 @@ def now_ts():
 
 def ensure_room_dir():
     try:
-        os.makedirs(ROOM_DIR, mode=0o755, exist_ok=True)
+        os.makedirs(room_dir(), mode=0o755, exist_ok=True)
         return True
     except Exception:
         return False
@@ -81,7 +87,7 @@ def valid_room(r):
 
 
 def room_path(r):
-    return os.path.join(ROOM_DIR, r + ".json")
+    return os.path.join(room_dir(), r + ".json")
 
 
 def gen_room():
@@ -136,14 +142,15 @@ def save_room(r, d):
 
 
 def cleanup_rooms():
-    if not os.path.isdir(ROOM_DIR):
+    d_root = room_dir()
+    if not os.path.isdir(d_root):
         return
     now = now_ts()
     try:
-        for fn in os.listdir(ROOM_DIR):
+        for fn in os.listdir(d_root):
             if not fn.endswith(".json"):
                 continue
-            p = os.path.join(ROOM_DIR, fn)
+            p = os.path.join(d_root, fn)
             try:
                 with open(p, "r", encoding="utf-8") as f:
                     d = json.load(f)
@@ -516,7 +523,8 @@ render();
 
 # --------------------------- 主流程 ----------------------------------------
 def main():
-    ensure_room_dir()
+    if not ensure_room_dir():
+        out_json({"status": "error", "message": "房间目录不可写: " + room_dir()}, 500)
     cleanup_rooms()
 
     q = get_query()
