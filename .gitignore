@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# CGI 运行时产生的房间数据（如果本地测试过）
+openurl_rooms/
+*.cgi.lock
+
+# 编辑器 / 系统
+.DS_Store
+.vscode/
+.idea/
