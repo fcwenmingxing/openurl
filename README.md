@@ -2,6 +2,11 @@
 
 扫码把手机上的网址甩给车机。
 
+> **⚠️ 这是 AI 写的「日抛代码」**
+>
+> 能跑、够用，但没打算长期维护，也不保证风格一致。
+> 发现 bug 或想加功能，**直接把它丢给 AI 让它改就行**，不用等我。
+
 ## 这是什么
 
 在车机浏览器里输入网址是件痛苦的事：虚拟键盘难打、长链接容易敲错、还不一定能复制粘贴。
@@ -12,39 +17,29 @@ openurl 用「房间号」把手机和车机临时配对，手机上输入、车
 3. 手机上粘贴或输入网址，点「发送到车机」
 4. 车机端 2 秒内收到，并自动跳转打开
 
-## 特性
+## 📦 安装
 
-- 纯 CGI 实现：无长连接、无 WebSocket、无数据库，能穿过严格的企业代理和反向代理
-- 服务器不长期存储：消息被车机取走即删除；房间 30 分钟无活动惰性清理
-- 服务端生成二维码 PNG，不依赖前端 JS 二维码库
-- 手机端历史记录存 localStorage，支持置顶、重发、同一网址自动去重
-- 车机端接收记录同样本地保存，可置顶 / 删除
-- 二维码里的链接按请求自身的 host / scheme 生成，内网、外网域名都可用
+> **就两步**：装一个 Python 依赖，把 `openurl.cgi` 放到 Apache 或 nginx 下。
 
-## 依赖
+### 1. 安装依赖
 
-- Python 3.6+
-- `qrcode`（生成二维码，需要 Pillow）
+需要 Python 3.6+。整个项目只有一个依赖：
 
 ```bash
 pip install "qrcode[pil]"
 ```
 
-缺少 qrcode / Pillow 时其他功能正常，只有二维码接口会返回 500。
+`qrcode[pil]` 会连同 Pillow 一起装上，用于在服务端生成二维码 PNG。
+不装也不影响收发网址，只是二维码接口会返回 500。
 
-## 部署
+### 2. 把 CGI 放到 Apache 或 nginx 下
 
-脚本本身就是一个可执行的 CGI 程序，Apache 或 nginx 都可以。
+```bash
+chmod +x openurl.cgi                 # CGI 必须有执行权限
+cp openurl.cgi /var/www/cgi-bin/     # 目录按你自己站点的配置改
+```
 
-要点：
-
-- 给脚本执行权限：`chmod +x openurl.cgi`
-- 房间数据默认写在 `/tmp/openurl_rooms/`，由脚本自动创建；CGI 运行用户（如 `www-data`、`_www`）需要对该目录有写权限，
-  要换位置就设 `OPENURL_ROOM_DIR`
-- 如果放在反向代理后面，务必正确传递 `HTTP_X_FORWARDED_HOST` 和 `HTTP_X_FORWARDED_PROTO`，
-  否则二维码里生成的链接会是内网地址，手机扫码打不开
-
-Apache 示例：
+**Apache** —— 开箱支持 CGI：
 
 ```apache
 ScriptAlias /openurl /var/www/cgi-bin/openurl.cgi
@@ -55,7 +50,11 @@ ScriptAlias /openurl /var/www/cgi-bin/openurl.cgi
 </Directory>
 ```
 
-nginx 走 fcgiwrap 的示例：
+**nginx** —— nginx 自己不能执行 CGI，需要 fcgiwrap：
+
+```bash
+apt install fcgiwrap                 # Debian/Ubuntu；macOS 用 brew install fcgiwrap
+```
 
 ```nginx
 location = /openurl.cgi {
@@ -66,6 +65,26 @@ location = /openurl.cgi {
     fastcgi_param SCRIPT_NAME /openurl.cgi;
 }
 ```
+
+### 3. 确认权限
+
+- **执行权限**：上面 `chmod +x` 已经给了
+- **写权限**：房间数据默认写在 `/tmp/openurl_rooms/`，脚本会自动创建，CGI 的运行用户
+  （`www-data` / `_www` / `nginx`）要对它有写权限；想换位置就设 `OPENURL_ROOM_DIR`
+
+配完访问 `http://你的地址/openurl.cgi` 就能看到车机端页面。
+
+> **前面还有一层反向代理的话**：确保它传递 `X-Forwarded-Host` 和 `X-Forwarded-Proto`，
+> 否则二维码里生成的是内网地址，手机扫码打不开。
+
+## 特性
+
+- 纯 CGI 实现：无长连接、无 WebSocket、无数据库，能穿过严格的企业代理和反向代理
+- 服务器不长期存储：消息被车机取走即删除；房间 30 分钟无活动惰性清理
+- 服务端生成二维码 PNG，不依赖前端 JS 二维码库
+- 手机端历史记录存 localStorage，支持置顶、重发、同一网址自动去重
+- 车机端接收记录同样本地保存，可置顶 / 删除
+- 二维码里的链接按请求自身的 host / scheme 生成，内网、外网域名都可用
 
 ## 配置
 
