@@ -41,6 +41,27 @@ ROOM_TTL = 30 * 60
 ROOM_MAX_MSGS = 50
 POLL_INTERVAL_MS = 2000
 
+# 二维码链接的兜底配置（用环境变量覆盖，见 README「配置」一节）
+#   OPENURL_DEFAULT_HOST  取不到 HTTP_HOST 时使用的兜底主机名，如 example.com:8080
+#   OPENURL_HTTPS_HOSTS   逗号分隔的主机名片段；host 命中任一即强制 https，如 example.com,.myds.me
+# 每次调用时读取，避免在长驻进程里沿用启动时的环境。
+def default_public_host():
+    return os.environ.get("OPENURL_DEFAULT_HOST", "").strip()
+
+
+def https_host_patterns():
+    return [
+        s.strip().lower()
+        for s in os.environ.get("OPENURL_HTTPS_HOSTS", "").split(",")
+        if s.strip()
+    ]
+
+
+def want_https(host):
+    """host 命中 OPENURL_HTTPS_HOSTS 中任一子串时返回 True。"""
+    h = (host or "").lower()
+    return any(p in h for p in https_host_patterns())
+
 
 # --------------------------- 房间存储 --------------------------------------
 def now_ts():
@@ -510,13 +531,19 @@ def main():
         if not valid_room(room):
             out_json({"status": "error", "message": "房间号无效"}, 400)
         # 扫码后进入手机端。用请求自身的 host/scheme，保证内外网都可用。
-        host = os.environ.get("HTTP_X_FORWARDED_HOST") or os.environ.get("HTTP_HOST") or "example.com:8080"
-        proto = os.environ.get("HTTP_X_FORWARDED_PROTO") or os.environ.get("HTTP_X_FORWARDED_SSL")
+        host = (os.environ.get("HTTP_X_FORWARDED_HOST", "").split(",")[0].strip()
+                or os.environ.get("HTTP_HOST", "").strip()
+                or default_public_host()
+                or "localhost")
+        # 代理一般用 X-Forwarded-Proto，部分老代理用 X-Forwarded-SSL: on
+        proto = os.environ.get("HTTP_X_FORWARDED_PROTO", "").split(",")[0].strip()
+        if not proto and os.environ.get("HTTP_X_FORWARDED_SSL", "").strip().lower() in ("on", "1", "https"):
+            proto = "https"
         if not proto:
-            if os.environ.get("HTTPS") == "on":
+            if os.environ.get("HTTPS", "").strip().lower() == "on":
                 proto = "https"
-            elif "example.com" in host:
-                # 公网域名始终走 https
+            elif want_https(host):
+                # 命中 OPENURL_HTTPS_HOSTS 的主机始终走 https
                 proto = "https"
             else:
                 proto = "http"

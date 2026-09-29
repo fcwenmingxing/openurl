@@ -66,6 +66,32 @@ location = /openurl.cgi {
 }
 ```
 
+## 配置
+
+二维码里的链接按请求自身的 `X-Forwarded-Host` / `Host` 和 `X-Forwarded-Proto` 推导，
+内网访问就生成内网地址，外网域名访问就生成外网地址。**正常部署不需要配任何东西。**
+
+只有当反向代理没传这些头（或者你需要固定域名）时才用下面两个可选环境变量兜底：
+
+| 变量 | 说明 | 示例 |
+| --- | --- | --- |
+| `OPENURL_DEFAULT_HOST` | 取不到 `HTTP_HOST` 时，二维码链接使用的兜底主机名 | `example.com:8080` |
+| `OPENURL_HTTPS_HOSTS` | 逗号分隔的主机名片段，命中即强制用 `https` 生成链接 | `example.com,.myds.me` |
+
+Apache 用 `SetEnv`：
+
+```apache
+SetEnv OPENURL_DEFAULT_HOST example.com:8080
+SetEnv OPENURL_HTTPS_HOSTS example.com,.myds.me
+```
+
+nginx + fcgiwrap 用 `fastcgi_param`：
+
+```nginx
+fastcgi_param OPENURL_DEFAULT_HOST example.com:8080;
+fastcgi_param OPENURL_HTTPS_HOSTS example.com,.myds.me;
+```
+
 ## 接口
 
 除 `action=send` / `join` / `leave` 外都是 GET。
@@ -97,7 +123,6 @@ location = /openurl.cgi {
 
 ## 已知问题 / TODO
 
-- 二维码的兜底主机名目前硬编码在源码里，公开部署前建议改成环境变量
 - 房间号只有 4 位数字，没有鉴权。任何人都可能猜中房间号并投递网址，
   仅适合临时、非敏感的用途；如需更强隔离建议换成更长的随机房间码
 - 消息存放在 `/tmp`，重启即清空（这也是设计意图）
